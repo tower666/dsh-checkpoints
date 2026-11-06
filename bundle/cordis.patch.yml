@@ -1,0 +1,3 @@
+- insert:
+    - id: checkpoints
+      name: 'dsh-checkpoints'

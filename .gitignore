@@ -1,0 +1,16 @@
+# Dependencies and build output
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Test fixtures (created by test/*.mjs)
+.scratch/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.log
+
+# npm pack output
+*.tgz
