@@ -12,10 +12,10 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
-import { Catalog } from '../bundle/lib/store.js'
-import { GitRunner } from '../bundle/lib/git.js'
-import { createRecorder } from '../bundle/lib/recorder.js'
-import { createService } from '../bundle/lib/service.js'
+import { Catalog } from '../lib/store.js'
+import { GitRunner } from '../lib/git.js'
+import { createRecorder } from '../lib/recorder.js'
+import { createService } from '../lib/service.js'
 
 const root = 'D:\\Desktop\\插件\\.scratch\\smoke'
 const workspace = join(root, 'ws')

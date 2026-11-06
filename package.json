@@ -1,6 +1,6 @@
 {
   "name": "dsh-checkpoints",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Per-turn git checkpoints of the workspace with a previewed, undoable revert: undo one turn's changes, or go back to the end of an earlier turn",
   "keywords": [
@@ -17,14 +17,13 @@
   ],
   "license": "MIT",
   "author": "fff",
-  "homepage": "https://gitee.com/tower666/dsh-checkpoints#readme",
+  "homepage": "https://github.com/tower666/dsh-checkpoints#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://gitee.com/tower666/dsh-checkpoints.git",
-    "directory": "bundle"
+    "url": "git+https://github.com/tower666/dsh-checkpoints.git"
   },
   "bugs": {
-    "url": "https://gitee.com/tower666/dsh-checkpoints/issues"
+    "url": "https://github.com/tower666/dsh-checkpoints/issues"
   },
   "engines": {
     "dsh": "^0.2.1-rc.3",

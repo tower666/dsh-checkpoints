@@ -16,10 +16,10 @@ import { join, relative } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 
-import { Catalog } from '../bundle/lib/store.js'
-import { GitRunner } from '../bundle/lib/git.js'
-import { createRecorder } from '../bundle/lib/recorder.js'
-import { createService } from '../bundle/lib/service.js'
+import { Catalog } from '../lib/store.js'
+import { GitRunner } from '../lib/git.js'
+import { createRecorder } from '../lib/recorder.js'
+import { createService } from '../lib/service.js'
 
 const root = 'D:\\Desktop\\插件\\.scratch\\integration'
 const workspace = join(root, 'repo')

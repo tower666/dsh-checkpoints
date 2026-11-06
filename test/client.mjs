@@ -9,7 +9,7 @@
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 
-const SOURCE_PATH = new URL('../bundle/client.js', import.meta.url)
+const SOURCE_PATH = new URL('../client.js', import.meta.url)
 const source = await readFile(SOURCE_PATH, 'utf8')
 
 /** Capture the module the bundle registers. */

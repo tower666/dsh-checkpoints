@@ -14,11 +14,11 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import assert from 'node:assert/strict'
 
-import { Catalog } from '../bundle/lib/store.js'
-import { GitRunner } from '../bundle/lib/git.js'
-import { createRecorder } from '../bundle/lib/recorder.js'
-import { createService } from '../bundle/lib/service.js'
-import { CHECKPOINT_ROUTES, registerRoutes } from '../bundle/lib/routes.js'
+import { Catalog } from '../lib/store.js'
+import { GitRunner } from '../lib/git.js'
+import { createRecorder } from '../lib/recorder.js'
+import { createService } from '../lib/service.js'
+import { CHECKPOINT_ROUTES, registerRoutes } from '../lib/routes.js'
 
 const root = 'D:\\Desktop\\插件\\.scratch\\routes'
 const workspace = join(root, 'ws')
