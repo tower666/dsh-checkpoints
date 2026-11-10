@@ -15,22 +15,26 @@ restarts, and a **revert** that can be applied to one file or to a whole turn.
 The package is a **bundle**: installing it also selects it in the profile, and
 a running Host loads it after one restart.
 
+### From npm (recommended)
+
+```
+dsh plugin --profile web add dsh-checkpoints
+```
+
+Or install `dsh-checkpoints` by name: ask the agent — the Creator preset's
+`plugin_manager` tool takes the package name as `install_bundle`'s `target` —
+or paste the name into **Plugins → Add**. The package page is
+<https://www.npmjs.com/package/dsh-checkpoints>.
+
 ### From git
 
 ```
 git+https://github.com/tower666/dsh-checkpoints.git#v1.1.0
 ```
 
-Ask the agent to install that bundle — the Creator preset's `plugin_manager`
-tool takes it as `install_bundle`'s `target` — or paste it into
-**Plugins → Add**. A tag keeps the instruction readable; pin a commit
-(`#<40-hex sha>`) instead when the target must be immutable.
-
-### From npm
-
-```
-dsh plugin --profile web add dsh-checkpoints
-```
+Same entry points as above, with that spec as the target. Use it when you want
+an exact source tree without the registry: a tag keeps the instruction
+readable, and a commit (`#<40-hex sha>`) makes the target immutable.
 
 ### From a local checkout
 
@@ -38,9 +42,9 @@ Point `install_bundle` at this directory's absolute path.
 
 ### Upgrading
 
-There is no upgrade path yet: remove the bundle, then install the newer tag or
-commit. Checkpoints under `$DSH_HOME/workspace-checkpoints` survive both, so the
-conversation history keeps working.
+There is no upgrade path yet: remove the bundle, then install the newer version,
+tag, or commit. Checkpoints under `$DSH_HOME/workspace-checkpoints` survive
+both, so the conversation history keeps working.
 
 ## What it does
 
