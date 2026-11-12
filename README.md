@@ -1,8 +1,7 @@
 # dsh-checkpoints
 
-Persistent, per-turn workspace checkpoints with a previewed, approved, and
-undoable revert — the "Cursor checkpoints" behaviour for the DeepSeek Harness
-Web UI.
+Persistent, per-turn workspace checkpoints with a previewed, approved revert —
+the "Cursor checkpoints" behaviour for the DeepSeek Harness Web UI.
 
 The shipped `@deepseek-ai/dsh-workspace-changes` plugin records what a turn
 changed and shows its diff, but its snapshots live in the Session's temporary
@@ -29,7 +28,7 @@ or paste the name into **Plugins → Add**. The package page is
 ### From git
 
 ```
-git+https://github.com/tower666/dsh-checkpoints.git#v1.1.0
+git+https://github.com/tower666/dsh-checkpoints.git#v2.0.0
 ```
 
 Same entry points as above, with that spec as the target. Use it when you want
@@ -53,18 +52,23 @@ both, so the conversation history keeps working.
   turn's changed-file list in a small catalog next to it.
 - **Serves** that history to the Web page: one row under each completed turn,
   plus the `/api/checkpoints.*` routes.
-- **Offers two actions per turn**, both behind one dialog that lists the files,
-  previews each one's unified diff, and writes only the files you tick — all of
-  them or just one:
-  - **Undo this turn's changes** — puts back the files *this turn* changed, at
-    their content from the start of the turn; files the turn did not touch are
-    left alone.
-  - **Revert to this turn** — makes the workspace look like the *end* of that
-    turn: everything up to it is kept, every change any later turn made is
-    dropped. Hidden on the newest turn, where nothing follows it yet.
+- **Offers one combined "revert and forget" action per turn**, behind one dialog
+  that lists every changed file, previews each one's unified diff, and reverts
+  all of them. The same action also stops the model from receiving that part of
+  the conversation on the next turn:
+  - **Revert and forget** (newest turn) — puts back the files *this turn*
+    changed, at their content from the start of the turn, and forgets *this
+    turn's* conversation.
+  - **Revert here and forget later turns** (earlier turns) — makes the
+    workspace look like the *end* of that turn, dropping every change made after
+    it, and forgets the conversation of every later turn.
 
-  The overwritten state is snapshotted first, so either action can itself be
-  undone.
+  An applied revert is final; forgetting is one-way. Forgetting is a *surface
+  replacement*: the turn's events stay in the append-only Session log, but a
+  replacement node shadows them out of the derived model history, so the next
+  request no longer carries them.
+  Each forgotten turn's row shows a "forgotten; not in context" badge in place of
+  the action.
 - **Exposes** the same operation to the model as the `workspace_checkpoint`
   tool, which asks the DSH approval answerers before it writes anything.
 
@@ -109,8 +113,10 @@ defaults instead of failing activation.
   refuses it when any planned file changed while the preview was open.
   Every path is resolved against the recorded workspace root and rejected when it
   is absolute or escapes it.
-- The state a revert overwrites is snapshotted first, and `/api/checkpoints.undo`
-  restores it.
+- A forget is refused while a turn is still running, and it is refused as stale
+  when the conversation gained a turn (or a compaction moved it) between the
+  preview and the apply, so the replacement always shadows exactly the range the
+  preview showed.
 - The agent tool routes the same write through `ctx.approval.request()`, so the
   session's approval policy decides it and `'unavailable'` fails closed. The
   approval service requires an open turn; the Web route is therefore gated by its
@@ -127,10 +133,9 @@ Connection's authentication fence and answer no-cache JSON.
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/checkpoints.turns?sessionId=` | GET | Every recorded turn of one Session. |
-| `/api/checkpoints.plan` | POST | Prepare a revert preview (`{sessionId, turn, side?, paths?}`): `side: 'start'` (default) undoes that turn's own files, `side: 'end'` restores the workspace to the end of that turn. |
+| `/api/checkpoints.plan` | POST | Prepare a preview (`{sessionId, turn, side?, paths?, forget?}`): `side: 'start'` (default) undoes that turn's own files, `side: 'end'` restores the workspace to the end of that turn; `forget: true` also plans the conversation range to remove from the model context. |
 | `/api/checkpoints.diff?planId=&path=` | GET | One file's unified diff for that preview. |
-| `/api/checkpoints.restore` | POST | Apply a preview (`{planId}`). |
-| `/api/checkpoints.undo` | POST | Undo an applied revert (`{undoId}`). |
+| `/api/checkpoints.restore` | POST | Apply a preview (`{planId}`), reverting its files and, when planned, appending the surface replacement that forgets the range. |
 
 ## The turn row
 
@@ -138,35 +143,32 @@ Each completed turn of the conversation carries one row with one action, chosen
 by the turn's position:
 
 ```
-newest turn    ⟲ 3 files changed in this turn   [Undo this turn’s changes…]
-earlier turns  ⟲ 3 files changed in this turn   [Revert to this turn…]
+newest turn    ⟲ 3 files changed in this turn   [Revert and forget]
+earlier turns  ⟲ 3 files changed in this turn   [Revert here and forget later turns]
+forgotten      ⟲ 3 files changed in this turn   [forgotten; not in context]
 ```
 
-| Turn | Action | Baseline | File list |
-|---|---|---|---|
-| newest | Undo this turn's changes | the start of this turn | the files *this turn* changed |
-| earlier | Revert to this turn | the end of this turn | every path that differs between the end of this turn and now |
+| Turn | Action | Baseline | Files reverted | Conversation forgotten |
+|---|---|---|---|---|
+| newest | Revert and forget | the start of this turn | the files *this turn* changed | this turn |
+| earlier | Revert here and forget later turns | the end of this turn | every path that differs between the end of this turn and now | every turn after this one |
 
 The newest turn has nothing after it, so "go back to here" would be a no-op; it
-offers the undo instead. Every earlier turn is a point to return to: reverting
-to it keeps that turn's own work and removes the later turns' additions and
-edits.
+offers the revert-and-forget instead. Every earlier turn is a point to return
+to: reverting to it keeps that turn's own work, removes the later turns'
+additions and edits, and forgets their conversations.
 
-One consequence worth knowing: undoing a *single historical* turn while keeping
-the later ones is not offered by the row. The row answers "what do I do at this
-position", and at a historical position the useful answer is "return here".
-
-Either dialog lists the files with their line counts, previews each file's
-unified diff on demand, offers select-all/select-none, and writes only the
-ticked files. A file the baseline does not hold is marked "will be deleted",
-an oversized snapshot blob "not revertable". After applying, the dialog offers
-to undo the action itself.
+The dialog lists the changed files with their line counts, previews each one's
+unified diff on demand, and reverts every listed file while also forgetting the
+planned turn range. A file the baseline does not hold is marked "will be
+deleted", an oversized snapshot blob "not revertable". An applied revert is
+final; the dialog does not offer to undo it.
 
 ## Store layout
 
 ```
 $DSH_HOME/workspace-checkpoints/
-  catalog.json                 # session → turn → {beforeTree, afterTree, files}
+  catalog.json                 # session → turn → {beforeTree, afterTree, files, forgotten?}
   empty-gitconfig              # the empty global config every git call uses
   repos/<sha1(workspace)>/     # one shadow repository per workspace
     .git/                      # its own objects, index untouched by the user
@@ -181,9 +183,10 @@ the alternate instead of being copied.
 ## Develop
 
 ```
-node test/smoke.mjs            # recorder + service: preview, restore, undo, persistence
+node test/smoke.mjs            # recorder + service: preview, restore, persistence
+node test/forget.mjs           # revert-and-forget: surface span, catalog flags, stale and busy
 node test/integration-git.mjs  # a real repository stays byte-identical
-node test/routes.mjs           # the five /api route handlers
+node test/routes.mjs           # the four /api route handlers
 node test/client.mjs           # the browser half's registration and render tree
 ```
 

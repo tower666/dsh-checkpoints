@@ -4,7 +4,7 @@
  * It replaces the Host `subprocess` capability with a thin child_process
  * adapter (file-backed stdio, so it also runs under the DSH file sandbox),
  * drives the recorder with synthetic turn events, and exercises the service's
- * preview / restore / undo / persistence paths. Run: node test/smoke.mjs
+ * preview / restore / persistence paths. Run: node test/smoke.mjs
  */
 import { spawn } from 'node:child_process'
 import { closeSync, openSync, readFileSync, rmSync } from 'node:fs'
@@ -151,25 +151,8 @@ async function main() {
   assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\nEDITED-DURING-PREVIEW\nthree\n')
   check('refuses a stale preview and leaves the workspace untouched', async () => 'checkpoints/stale')
 
-  // ---- a fresh preview on the current content applies
-  await writeFile(join(workspace, 'a.txt'), 'one\nTWO-CHANGED\nthree\n')
-  const fresh = await service.prepare({ sessionId, turn: 1, side: 'start' })
-  const restored = await service.restore({ planId: fresh.planId })
-  assert.equal(restored.restored, 2)
-  assert.equal(restored.deleted, 1)
-  assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\ntwo\nthree\n')
-  assert.equal(await readFile(join(workspace, 'src', 'b.txt'), 'utf8'), 'alpha\n')
-  await assert.rejects(() => stat(join(workspace, 'src', 'c.txt')))
-  check('restores a whole turn and deletes the files the turn created', async () => `restored ${restored.restored}, deleted ${restored.deleted}`)
-
-  // ---- undo puts the overwritten state back
-  const undone = await service.undo({ undoId: restored.undo.id })
-  assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\nTWO-CHANGED\nthree\n')
-  assert.equal(await readFile(join(workspace, 'src', 'c.txt'), 'utf8'), 'new file\n')
-  await assert.rejects(() => stat(join(workspace, 'src', 'b.txt')))
-  check('undoes the revert from the snapshot taken before it', async () => `restored ${undone.restored}, deleted ${undone.deleted}`)
-
   // ---- single-file revert touches one file only
+  await writeFile(join(workspace, 'a.txt'), 'one\nTWO-CHANGED\nthree\n')
   const single = await service.prepare({ sessionId, turn: 1, side: 'start', paths: ['src/c.txt'] })
   assert.equal(single.files.length, 1)
   const singleResult = await service.restore({ planId: single.planId })
@@ -179,14 +162,26 @@ async function main() {
   assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\nTWO-CHANGED\nthree\n')
   check('reverts exactly one requested file', async () => 'deleted src/c.txt only')
 
+  // ---- a fresh whole-turn preview applies to what is left
+  const fresh = await service.prepare({ sessionId, turn: 1, side: 'start' })
+  const restored = await service.restore({ planId: fresh.planId })
+  assert.equal(restored.restored, 2)
+  assert.equal(restored.deleted, 0)
+  assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\ntwo\nthree\n')
+  assert.equal(await readFile(join(workspace, 'src', 'b.txt'), 'utf8'), 'alpha\n')
+  await assert.rejects(() => stat(join(workspace, 'src', 'c.txt')))
+  check('restores a whole turn with no leftover deletion', async () => `restored ${restored.restored}, deleted ${restored.deleted}`)
+
   // ---- end side: keep everything up to that turn and drop what came after it
   const endPlan = await service.prepare({ sessionId, turn: 1, side: 'end' })
-  assert.deepEqual(endPlan.files.map((file) => `${file.action}:${file.path}`), ['restore:src/c.txt'])
-  const backToTurn = await service.restore({ planId: endPlan.planId })
+  assert.deepEqual(
+    endPlan.files.map((file) => `${file.action}:${file.path}`).sort(),
+    ['delete:src/b.txt', 'restore:a.txt', 'restore:src/c.txt'],
+  )
+  await service.restore({ planId: endPlan.planId })
   assert.equal(await readFile(join(workspace, 'src', 'c.txt'), 'utf8'), 'new file\n')
   assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'one\nTWO-CHANGED\nthree\n')
-  await service.undo({ undoId: backToTurn.undo.id })
-  await assert.rejects(() => stat(join(workspace, 'src', 'c.txt')))
+  await assert.rejects(() => stat(join(workspace, 'src', 'b.txt')))
   check('restores the workspace to the end of the selected turn', async () => JSON.stringify(endPlan.totals))
 
   // ---- the user git repository is untouched: no repository was ever created here
@@ -196,8 +191,9 @@ async function main() {
   // ---- a new Host generation reads the same catalog and snapshots
   boot()
   const afterRestart = await service.prepare({ sessionId, turn: 1, side: 'start' })
-  // a.txt is restored and src/b.txt comes back; src/c.txt is already gone.
-  assert.equal(afterRestart.totals.restore + afterRestart.totals.delete, 2)
+  // a.txt and src/b.txt come back; src/c.txt is removed again.
+  assert.equal(afterRestart.totals.restore, 2)
+  assert.equal(afterRestart.totals.delete, 1)
   const restartDiff = await service.diff({ planId: afterRestart.planId, path: 'a.txt' })
   assert.equal(restartDiff.kind, 'text')
   check('reads checkpoints and diffs after a Host restart', async () => 'new generation served the same turn')

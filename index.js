@@ -3,8 +3,8 @@
  *
  * Records a durable git snapshot of the workspace at the start and at the end
  * of every turn in a shadow repository that never touches the user's index,
- * objects, refs, or history, and serves previewed, undoable reverts of those
- * snapshots to the Web card and to the `workspace_checkpoint` tool.
+ * objects, refs, or history, and serves previewed reverts of those snapshots
+ * to the Web card and to the `workspace_checkpoint` tool.
  */
 import { join } from 'node:path'
 import { resolveConfig } from './lib/config.js'
@@ -18,6 +18,19 @@ import { registerTool } from './lib/tool.js'
 
 /** Capabilities this plugin cannot work without. */
 export const inject = ['subprocess', 'connection']
+
+/**
+ * The live Session store, when this Host provides one. Forgetting rewrites the
+ * conversation surface, so it needs the live Session; the file-revert half
+ * works even when the store is absent.
+ */
+function sessionStoreOf(ctx) {
+  try {
+    return ctx.get('sessions')
+  } catch {
+    return undefined
+  }
+}
 
 /** A logger that never throws when the logging service is absent. */
 function loggerOf(ctx) {
@@ -53,6 +66,7 @@ export function apply(ctx, rawConfig) {
     git,
     catalog,
     ensureRepo: recorder.ensureRepo,
+    sessions: sessionStoreOf(ctx),
     signal: lifetime.signal,
     log,
   })

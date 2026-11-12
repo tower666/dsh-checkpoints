@@ -107,13 +107,7 @@ async function main() {
   assert.notEqual(reverted, before, 'the file did not change')
   assert.match(diff.text, /\+line two/, 'the preview shows the content the revert installs')
 
-  const undone = await service.undo({ undoId: applied.undo.id })
-  const restored = await readFile(join(workspace, targetPath), 'utf8')
-  console.log('undo:', JSON.stringify(undone))
-  console.log('content after undo   :', JSON.stringify(restored))
-  assert.equal(restored, before, 'undo did not put the overwritten content back')
-
-  console.log('\nPASS: a new process read the recorded turn, previewed it, reverted one file, and undid the revert')
+  console.log('\nPASS: a new process read the recorded turn, previewed it, and reverted one file')
 }
 
 main().catch((error) => {

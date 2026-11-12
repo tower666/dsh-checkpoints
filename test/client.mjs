@@ -163,15 +163,15 @@ const cardText = textOf(seededCard)
 assert.match(cardText, /card\.title/)
 assert.match(cardText, /card\.toEnd/)
 assert.doesNotMatch(cardText, /card\.undo/)
-console.log('PASS a historical turn offers only "revert to this turn":', JSON.stringify(cardText.trim()))
+console.log('PASS a historical turn offers only "revert here and forget later turns":', JSON.stringify(cardText.trim()))
 
-// ---- the newest recorded turn offers only the undo: nothing follows it
+// ---- the newest recorded turn offers only the revert-and-forget: nothing follows it
 const lastTurnReact = makeReact([{ turn: 5, total: 1, files: [] }, 5, null, 0])
 registered.factory(() => lastTurnReact)
 const lastTurnTree = Card({ turn: { turn: 5 }, sessionId: 'session', t: translate })
 assert.match(textOf(lastTurnTree), /card\.undo/)
 assert.doesNotMatch(textOf(lastTurnTree), /card\.toEnd/)
-console.log('PASS the newest turn offers only "undo this turn\'s changes":', JSON.stringify(textOf(lastTurnTree).trim()))
+console.log('PASS the newest turn offers only "revert and forget":', JSON.stringify(textOf(lastTurnTree).trim()))
 
 // ---- render the dialog body itself in its ready phase
 const plan = {
@@ -191,11 +191,6 @@ assert.ok(dialogElement !== undefined, 'the open card renders the revert dialog 
 const dialogReact = makeReact([
   'ready', // phase
   plan, // plan
-  { 'src/a.txt': true, 'src/deleted.txt': true }, // selected
-  {}, // diffs
-  'src/a.txt', // expanded (renders the loading placeholder)
-  undefined, // result
-  undefined, // undoState
   undefined, // failure
   false, // busy
   0, // attempt
@@ -211,61 +206,35 @@ assert.match(dialogText, /huge\.bin/, 'lists the unsupported file')
 assert.match(dialogText, /dialog\.unsupported/, 'marks the unsupported file')
 assert.match(dialogText, /dialog\.confirm/, 'offers the confirm action')
 assert.match(dialogText, /dialog\.undoTitle/)
-assert.match(dialogText, /dialog\.baseline\.start/)
 
 const nodes = elementsOf(dialogTree)
 const overlay = nodes.find((node) => node.props.className === 'dsh-ckpt-overlay')
 const dialog = nodes.find((node) => node.props.className === 'dsh-ckpt-dialog')
-const checkboxes = nodes.filter((node) => node.type === 'input' && node.props.type === 'checkbox')
 assert.ok(overlay !== undefined, 'renders the modal overlay')
 assert.ok(dialog !== undefined, 'renders the modal frame')
 assert.equal(dialog.props.role, 'dialog')
 assert.equal(dialog.props['aria-modal'], 'true')
-assert.equal(checkboxes.length, 3, 'one checkbox per listed file')
-assert.equal(checkboxes[0].props.checked, true)
-assert.equal(checkboxes[2].props.disabled, true, 'the unsupported file cannot be selected')
 const confirmButton = nodes.find((node) => node.type === 'button' && String(node.children).includes('dialog.confirm'))
-assert.equal(confirmButton.props.disabled, false, 'the confirm action is available while files are selected')
+assert.equal(confirmButton.props.disabled, false, 'the confirm action is available once the preview is ready')
 const styleNode = nodes.find((node) => node.type === 'style')
 assert.ok(styleNode !== undefined && styleNode.children.length > 0, 'renders its stylesheet as a component-local element')
-
-// ---- the comparison block: loading, text, binary, and unsupported states
-const diffBlock = nodes.find((node) => typeof node.type === 'function' && Object.hasOwn(node.props, 'state'))
-assert.ok(diffBlock !== undefined, 'the expanded file renders a comparison component')
-const loadingText = textOf(diffBlock.type({ state: undefined, translate }))
-assert.equal(loadingText.trim(), 'dialog.diffLoading')
-const textBody = textOf(
-  diffBlock.type({ state: { state: 'ready', diff: { kind: 'text', text: '@@ -1 +1 @@\n-old line\n+new line\n', truncated: true } }, translate }),
-)
-assert.match(textBody, /-old line/)
-assert.match(textBody, /\+new line/)
-assert.match(textBody, /dialog\.diffTruncated/)
-assert.match(textOf(diffBlock.type({ state: { state: 'ready', diff: { kind: 'binary' } }, translate })), /dialog\.diffBinary/)
-assert.match(textOf(diffBlock.type({ state: { state: 'error' }, translate })), /dialog\.diffFailed/)
-console.log('PASS renders the comparison block for the loading, text, binary, and failed states')
 
 // ---- the same dialog for "revert to the end of this turn"
 const endPlan = { ...plan, side: 'end' }
 const endReact = makeReact([
-  'ready',
-  endPlan,
-  { 'src/a.txt': true },
-  {},
-  null,
-  undefined,
-  undefined,
-  undefined,
-  false,
-  0,
+  'ready', // phase
+  endPlan, // plan
+  undefined, // failure
+  false, // busy
+  0, // attempt
 ])
 registered.factory(() => endReact)
 const endTree = dialogElement.type({ ...dialogElement.props, side: 'end' })
 const endText = textOf(endTree)
 assert.match(endText, /dialog\.endTitle/)
-assert.match(endText, /dialog\.baseline\.end/)
 assert.match(endText, /dialog\.confirmEnd/)
 assert.doesNotMatch(endText, /dialog\.undoTitle/)
-console.log('PASS renders the "revert to this turn" dialog with its own title, baseline, and confirm label')
+console.log('PASS renders the "revert to this turn" dialog with its own title and confirm label')
 
 console.log('PASS renders the revert dialog:', dialogText.replace(/\s+/g, ' ').slice(0, 240).trim(), '…')
 console.log('\nPASS: the client half registers correctly and renders its card and dialog tree')

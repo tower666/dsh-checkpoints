@@ -10,7 +10,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { closeSync, openSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs'
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -152,17 +152,16 @@ async function main() {
   // Hash again before running any git command of my own: `git status` refreshes the index stat cache.
   const gitAfterRecording = hashGitTree()
 
-  // revert the whole of turn 1 to its start, then undo
+  // revert the whole of turn 1 to its start
   const plan = await service.prepare({ sessionId, turn: 1, side: 'start' })
   const applied = await service.restore({ planId: plan.planId })
   const revertedA = await readFile(join(workspace, 'a.txt'), 'utf8')
   const newGone = await stat(join(workspace, 'src', 'new.txt')).then(() => false, () => true)
-  const undone = await service.undo({ undoId: applied.undo.id })
 
-  // turn 2: delete the file turn 1 created, which the undo put back
+  // turn 2: edit the tracked file again, so the repository still has a local change
   recorder.onEvent(session, { type: 'turn/start', data: { turn: 2 } })
   await recorder.awaitBaseline(sessionId)
-  await rm(join(workspace, 'src', 'new.txt'))
+  await writeFile(join(workspace, 'a.txt'), 'line 1\nTURN 2\nline 3\n')
   recorder.onEvent(session, { type: 'turn/end', data: { turn: 2 } })
   await drain(async () => (await catalog.turn(sessionId, 2))?.afterTree != null, 'turn 2')
 
@@ -176,7 +175,7 @@ async function main() {
 
   // ---- assertions
   assert.equal(gitAfterRecording.digest, gitBefore.digest, 'a file under .git changed while the plugin snapshotted the repository')
-  assert.equal(gitAfterRevert.digest, gitBefore.digest, 'a file under .git changed during the revert or the undo')
+  assert.equal(gitAfterRevert.digest, gitBefore.digest, 'a file under .git changed during the revert')
   assert.equal(finalState.head, headBefore, 'HEAD moved')
   assert.equal(finalState.log, logBefore, 'history changed')
   assert.equal(finalState.objects, objectsBefore, 'the repository object store changed')
@@ -184,8 +183,7 @@ async function main() {
 
   assert.equal(revertedA, 'line 1\nline 2\nline 3\n', 'a.txt was not restored to the turn-start content')
   assert.equal(newGone, true, 'the file created by the turn was not removed')
-  assert.equal(undone.restored + undone.deleted, 2)
-  assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'line 1\nCHANGED IN TURN 1\nline 3\n', 'undo did not restore the overwritten content')
+  assert.equal(await readFile(join(workspace, 'a.txt'), 'utf8'), 'line 1\nTURN 2\nline 3\n', 'turn 2 did not land on the reverted tree')
 
   /** The shadow store really holds the snapshot objects. */
   const shadowRepo = join(storeDir, 'repos')
@@ -205,7 +203,7 @@ async function main() {
   console.log('.git digest post-revert:', gitAfterRevert.digest)
   console.log('turn 1 files         :', JSON.stringify((await catalog.turn(sessionId, 1)).files))
   console.log('turn 2 files         :', JSON.stringify((await catalog.turn(sessionId, 2)).files))
-  console.log('revert / undo        :', JSON.stringify({ applied, undone }))
+  console.log('revert               :', JSON.stringify(applied))
   console.log('\nPASS: a real repository keeps its index, objects, refs, and history while checkpoints are recorded and reverted')
 }
 

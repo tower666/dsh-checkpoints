@@ -3,7 +3,7 @@
  *
  * Registers the plugin's routes against a stub Connection fetch registry and
  * drives them with real Request/Response objects, so the JSON shapes, status
- * codes, and the plan → diff → restore → undo handshake are checked without a
+ * codes, and the plan → diff → restore handshake are checked without a
  * browser.
  *
  * Run: node test/routes.mjs
@@ -134,13 +134,12 @@ async function main() {
     CHECKPOINT_ROUTES.plan,
     CHECKPOINT_ROUTES.restore,
     CHECKPOINT_ROUTES.turns,
-    CHECKPOINT_ROUTES.undo,
   ].sort())
   for (const route of routes.values()) {
     assert.ok(route.path.startsWith('/api/'), 'routes live under /api')
     assert.equal(route.requestBody, 'buffered')
   }
-  console.log('PASS registers five buffered /api routes:', [...routes.keys()].join(', '))
+  console.log('PASS registers four buffered /api routes:', [...routes.keys()].join(', '))
 
   // ---- turns
   const listed = await call(`${CHECKPOINT_ROUTES.turns}?sessionId=${sessionId}`)
@@ -209,17 +208,6 @@ async function main() {
   assert.equal(replay.body.error.code, 'checkpoints/plan-consumed')
   console.log('PASS POST restore refuses a consumed plan → 409 checkpoints/plan-consumed')
 
-  // ---- undo
-  const undone = await call(CHECKPOINT_ROUTES.undo, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ undoId: applied.body.undo.id }),
-  })
-  assert.equal(undone.status, 200)
-  assert.equal(undone.body.restored, 2)
-  assert.equal(await readFile(join(workspace, 'x.txt'), 'utf8'), 'first\nSECOND CHANGED\n')
-  console.log('PASS POST undo →', JSON.stringify({ restored: undone.body.restored, deleted: undone.body.deleted }))
-
   // ---- "go back to this turn": keep everything up to turn 1, drop every later change
   await writeFile(join(workspace, 'x.txt'), 'first\nEDITED LATER\n')
   await writeFile(join(workspace, 'later.txt'), 'added by a later turn\n')
@@ -232,7 +220,7 @@ async function main() {
   assert.equal(toEnd.body.plan.side, 'end')
   assert.deepEqual(
     toEnd.body.plan.files.map((file) => `${file.action}:${file.path}`).sort(),
-    ['delete:later.txt', 'restore:x.txt'],
+    ['delete:gone.txt', 'delete:later.txt', 'restore:added.txt', 'restore:x.txt'],
   )
   const backToTurn = await call(CHECKPOINT_ROUTES.restore, {
     method: 'POST',
@@ -243,13 +231,6 @@ async function main() {
   assert.equal(backToTurn.body.side, 'end')
   assert.equal(await readFile(join(workspace, 'x.txt'), 'utf8'), 'first\nSECOND CHANGED\n')
   await assert.rejects(() => readFile(join(workspace, 'later.txt'), 'utf8'))
-  await call(CHECKPOINT_ROUTES.undo, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ undoId: backToTurn.body.undo.id }),
-  })
-  assert.equal(await readFile(join(workspace, 'x.txt'), 'utf8'), 'first\nEDITED LATER\n')
-  assert.equal(await readFile(join(workspace, 'later.txt'), 'utf8'), 'added by a later turn\n')
   console.log('PASS POST plan side=end →', JSON.stringify(toEnd.body.plan.totals), '(keeps up to the turn, drops what followed)')
 
   console.log('\nPASS: every route the card calls answers with the documented status and JSON shape')

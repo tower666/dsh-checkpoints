@@ -1,8 +1,8 @@
 {
   "name": "dsh-checkpoints",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Per-turn git checkpoints of the workspace with a previewed, undoable revert: undo one turn's changes, or go back to the end of an earlier turn",
+  "description": "Per-turn git checkpoints of the workspace with a previewed revert that also forgets the conversation: undo one turn's changes, or go back to the end of an earlier turn, and drop those turns from the model context",
   "keywords": [
     "dsh-plugin",
     "dsh-bundle",
